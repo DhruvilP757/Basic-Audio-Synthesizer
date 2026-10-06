@@ -1,0 +1,82 @@
+# ====================================================================
+# Build Output & CMake Generated Files
+# ====================================================================
+build/
+[Bb]uild*/
+bin/
+out/
+CMakeFiles/
+CMakeScripts/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+Makefile
+*.ninja
+.ninja_*
+*.ninja_log
+*.ninja_deps
+
+# ====================================================================
+# Compiled Objects, Libraries & Binaries
+# ====================================================================
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exp
+*.pdb
+*.ilk
+
+# ====================================================================
+# Qt Creator & MOC Generated Files
+# ====================================================================
+*.user
+*.user.*
+.qtcreator/
+.qt/
+*moc_*.cpp
+*qrc_*.cpp
+ui_*.h
+*_autogen/
+*.qmlc
+*.jsc
+
+# ====================================================================
+# Temporary Audio Output & Exported Files
+# ====================================================================
+*.wav
+synth_preview.wav
+audio_synth_preview.wav
+synthesizer_output.wav
+synth_output.wav
+
+# ====================================================================
+# IDE & Editor Files
+# ====================================================================
+.vscode/
+.idea/
+*.suo
+*.sln.docstates
+*.opensdf
+*.sdf
+*.VC.db
+
+# ====================================================================
+# Operating System Files
+# ====================================================================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ====================================================================
+# Whitelist Project Assets (Do not ignore README screenshots)
+# ====================================================================
+!assets/
+!assets/*.png
