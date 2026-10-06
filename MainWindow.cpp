@@ -30,51 +30,86 @@ static QString getNoteName(float freq)
     return (midi < 0) ? "Sub-bass" : QString("%1%2").arg(n[(midi % 12 + 12) % 12]).arg((midi / 12) - 1);
 }
 
-// Constructor: Initialize Audio Nodes, Dual Racks & UI
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), currentBuffer(nullptr), currentSampleCount(0)
 {
-    // 1. Audio Generators
+    // Audio Generators
     osc = new Oscillator(440.0f, WaveType::SINE);
     osc2 = new Oscillator(440.0f, WaveType::SINE);
 
-    // 2. Build Dual Processing Racks (Enables individual wave DSP pipelines)
-    auto makeRack = [](EffectsRack *&r, HighPassFilter *&hp, LowPassFilter *&lp, Overdrive *&od,
-                       Distortion *&dist, Bitcrusher *&bit, Tremolo *&trem, Echo *&echo, Reverb *&rev, Gain *&gain) {
-        hp = new HighPassFilter(20.0f);
-        lp = new LowPassFilter(20000.0f);
-        od = new Overdrive(0.0f);
-        dist = new Distortion(1.0f);
-        bit = new Bitcrusher(16);
-        trem = new Tremolo(5.0f, 0.0f);
-        echo = new Echo(0.25f, 0.0f);
-        rev = new Reverb(0.0f);
-        gain = new Gain(0.8f);
-
-        r = new EffectsRack(12);
-        r->addNode(hp); r->addNode(lp); r->addNode(od); r->addNode(dist);
-        r->addNode(bit); r->addNode(trem); r->addNode(echo); r->addNode(rev); r->addNode(gain);
-    };
-
-    makeRack(rack, highPass, lowPass, overdrive, dist, bitcrush, tremolo, echo, reverb, masterGain);
-    makeRack(rack2, hp2, lp2, od2, dist2, bit2, trem2, echo2, rev2, gain2);
-
     setupUI();
     setWindowTitle("Audio Synthesizer - OOP Project");
-    resize(870, 720);
+    resize(870, 740);
 
-    onParametersChanged(); // Initial generation
+    onParametersChanged(); // Initial sound generation
 }
 
 MainWindow::~MainWindow()
 {
     onStopClicked();
-    delete osc; delete osc2;
-    delete highPass; delete lowPass; delete overdrive; delete dist; delete bitcrush;
-    delete tremolo; delete echo; delete reverb; delete masterGain; delete rack;
-    delete hp2; delete lp2; delete od2; delete dist2; delete bit2;
-    delete trem2; delete echo2; delete rev2; delete gain2; delete rack2;
+    delete osc;
+    delete osc2;
     delete[] currentBuffer;
+}
+
+// Modular helper to create an individual channel's effect tab
+QWidget *MainWindow::createChannelTab(const QString &title, ChannelKnobs &k, ChannelEffects &fx)
+{
+    QWidget *tab = new QWidget();
+    QGridLayout *grid = new QGridLayout(tab);
+
+    auto addKnob = [&](const QString &name, QDial *&d, QSpinBox *&s, int min, int max, int val, const QString &unit, int r, int c) {
+        QWidget *w = new QWidget();
+        QVBoxLayout *l = new QVBoxLayout(w);
+        l->setContentsMargins(2, 2, 2, 2); l->setSpacing(2);
+
+        QLabel *lbl = new QLabel(name);
+        lbl->setAlignment(Qt::AlignCenter);
+        lbl->setStyleSheet("font-weight: bold; font-size: 11px; color: #58a6ff;");
+
+        d = new QDial(); d->setRange(min, max); d->setValue(val); d->setNotchesVisible(true);
+        s = new QSpinBox(); s->setRange(min, max); s->setValue(val); s->setSuffix(unit);
+        s->setAlignment(Qt::AlignCenter); s->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        s->setStyleSheet("background: #272f3d; color: #f0f6fc; border: 1px solid #3c485c; border-radius: 3px; font-size: 11px; min-width: 55px;");
+
+        l->addWidget(lbl);
+        l->addWidget(d, 0, Qt::AlignCenter);
+        l->addWidget(s, 0, Qt::AlignCenter);
+
+        connect(d, &QDial::valueChanged, s, &QSpinBox::setValue);
+        connect(s, QOverload<int>::of(&QSpinBox::valueChanged), d, &QDial::setValue);
+        connect(d, &QDial::valueChanged, this, &MainWindow::onParametersChanged);
+
+        grid->addWidget(w, r, c);
+    };
+
+    // Row 0: Tone & Saturation
+    addKnob("High-Pass", k.hpDial, k.hpSpin, 20, 2000, 20, " Hz", 0, 0);
+    addKnob("Low-Pass", k.lpDial, k.lpSpin, 200, 20000, 20000, " Hz", 0, 1);
+    addKnob("Overdrive", k.odDial, k.odSpin, 0, 100, 0, " %", 0, 2);
+    addKnob("Distortion", k.distDial, k.distSpin, 5, 100, 100, " %", 0, 3);
+    addKnob("Bitcrush", k.bitDial, k.bitSpin, 2, 16, 16, " bit", 0, 4);
+
+    QPushButton *resetBtn = new QPushButton("Reset " + title + "\nEffects");
+    resetBtn->setStyleSheet("background: #30363d; border: 1px solid #484f58; color: #f0f6fc; font-weight: bold; padding: 6px;");
+    grid->addWidget(resetBtn, 0, 5);
+
+    // Row 1: Space, Modulation & Volume
+    addKnob("Reverb", k.revDial, k.revSpin, 0, 90, 0, " %", 1, 0);
+    addKnob("Echo Time", k.delDial, k.delSpin, 20, 500, 250, " ms", 1, 1);
+    addKnob("Echo Repeat", k.fbDial, k.fbSpin, 0, 80, 0, " %", 1, 2);
+    addKnob("Tremolo Rate", k.tRateDial, k.tRateSpin, 1, 20, 5, " Hz", 1, 3);
+    addKnob("Tremolo Depth", k.tDepthDial, k.tDepthSpin, 0, 100, 0, " %", 1, 4);
+    addKnob("Master Vol", k.volDial, k.volSpin, 0, 100, 80, " %", 1, 5);
+
+    connect(resetBtn, &QPushButton::clicked, [&k, this]() {
+        k.hpDial->setValue(20); k.lpDial->setValue(20000); k.odDial->setValue(0);
+        k.distDial->setValue(100); k.bitDial->setValue(16); k.revDial->setValue(0);
+        k.delDial->setValue(250); k.fbDial->setValue(0); k.tRateDial->setValue(5);
+        k.tDepthDial->setValue(0); k.volDial->setValue(80);
+    });
+
+    return tab;
 }
 
 void MainWindow::setupUI()
@@ -104,7 +139,7 @@ void MainWindow::setupUI()
     wave2ShiftSpin->setRange(-24, 24);
     wave2ShiftSpin->setValue(0);
     wave2ShiftSpin->setSuffix(" st");
-    wave2ShiftSpin->setToolTip("Wave 2 pitch shift in semitones (0 = unison, 12 = octave up, -12 = octave down)");
+    wave2ShiftSpin->setToolTip("Wave 2 semitone pitch shift (0 = unison, 12 = octave up, -12 = octave down)");
 
     freqSlider = new QSlider(Qt::Horizontal);
     freqSlider->setRange(20, 20000); // Full human hearing range (20 Hz - 20,000 Hz)
@@ -150,73 +185,20 @@ void MainWindow::setupUI()
 
     mainLayout->addWidget(genBox);
 
-    // 2. Real-Life Usable Effects Rack (Knobs with bottom editable numbers)
-    QGroupBox *fxBox = new QGroupBox("2. Real-Life Usable Effects Processing Rack");
-    QVBoxLayout *fxMain = new QVBoxLayout(fxBox);
+    // 2. Separate Channel Effects Tabs (Apply individual effects to Wave 1 and Wave 2)
+    QGroupBox *fxBox = new QGroupBox("2. Individual Effects Processing (Per-Wave Channels)");
+    QVBoxLayout *fxLayout = new QVBoxLayout(fxBox);
 
-    // Header: Effect Target Routing
-    QHBoxLayout *fxHeader = new QHBoxLayout();
-    fxHeader->addWidget(new QLabel("<b>Apply Effects To:</b>"));
-    fxTargetSelect = new QComboBox();
-    styleCombo(fxTargetSelect);
-    fxTargetSelect->addItems({
-        "Both Waves Individually",
-        "Wave 1 Only (Wave 2 Clean)",
-        "Wave 2 Only (Wave 1 Clean)",
-        "Both Waves Combined (Summed)"
-    });
-    fxTargetSelect->setStyleSheet("QComboBox { padding: 4px 8px; border: 1px solid #3c485c; border-radius: 4px; background: #272f3d; color: #f0f6fc; font-weight: bold; min-width: 220px; }"
-                                  "QComboBox QAbstractItemView { background: #202632; color: #f0f6fc; selection-background-color: #1f6feb; }");
-    fxHeader->addWidget(fxTargetSelect);
-    fxHeader->addStretch();
-    fxMain->addLayout(fxHeader);
+    fxTabs = new QTabWidget();
+    fxTabs->setStyleSheet(
+        "QTabWidget::pane { border: 1px solid #3c485c; border-radius: 4px; background: #1e232d; }"
+        "QTabBar::tab { background: #272f3d; color: #8b949e; padding: 6px 16px; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
+        "QTabBar::tab:selected { background: #1f6feb; color: #ffffff; }"
+    );
 
-    QGridLayout *fxGrid = new QGridLayout();
-    fxMain->addLayout(fxGrid);
-
-    auto addKnob = [&](const QString &name, QDial *&d, QSpinBox *&s, int min, int max, int val, const QString &unit, int r, int c) {
-        QWidget *w = new QWidget();
-        QVBoxLayout *l = new QVBoxLayout(w);
-        l->setContentsMargins(2, 2, 2, 2); l->setSpacing(2);
-
-        QLabel *lbl = new QLabel(name);
-        lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet("font-weight: bold; font-size: 11px; color: #58a6ff;");
-
-        d = new QDial(); d->setRange(min, max); d->setValue(val); d->setNotchesVisible(true);
-        s = new QSpinBox(); s->setRange(min, max); s->setValue(val); s->setSuffix(unit);
-        s->setAlignment(Qt::AlignCenter); s->setButtonSymbols(QAbstractSpinBox::NoButtons);
-        s->setStyleSheet("background: #272f3d; color: #f0f6fc; border: 1px solid #3c485c; border-radius: 3px; font-size: 11px; min-width: 55px;");
-
-        l->addWidget(lbl);
-        l->addWidget(d, 0, Qt::AlignCenter);
-        l->addWidget(s, 0, Qt::AlignCenter);
-
-        connect(d, &QDial::valueChanged, s, &QSpinBox::setValue);
-        connect(s, QOverload<int>::of(&QSpinBox::valueChanged), d, &QDial::setValue);
-        connect(d, &QDial::valueChanged, this, &MainWindow::onParametersChanged);
-
-        fxGrid->addWidget(w, r, c);
-    };
-
-    // Row 0: Tone & Saturation
-    addKnob("High-Pass", hpDial, hpSpin, 20, 2000, 20, " Hz", 0, 0);
-    addKnob("Low-Pass", lpDial, lpSpin, 200, 20000, 20000, " Hz", 0, 1);
-    addKnob("Overdrive", odDial, odSpin, 0, 100, 0, " %", 0, 2);
-    addKnob("Distortion", distDial, distSpin, 5, 100, 100, " %", 0, 3);
-    addKnob("Bitcrush", bitDial, bitSpin, 2, 16, 16, " bit", 0, 4);
-
-    QPushButton *resetBtn = new QPushButton("Reset All\nEffects");
-    resetBtn->setStyleSheet("background: #30363d; border: 1px solid #484f58; color: #f0f6fc; font-weight: bold; padding: 6px;");
-    fxGrid->addWidget(resetBtn, 0, 5);
-
-    // Row 1: Space, Modulation & Volume
-    addKnob("Reverb", revDial, revSpin, 0, 90, 0, " %", 1, 0);
-    addKnob("Echo Time", delDial, delSpin, 20, 500, 250, " ms", 1, 1);
-    addKnob("Echo Repeat", fbDial, fbSpin, 0, 80, 0, " %", 1, 2);
-    addKnob("Tremolo Rate", tRateDial, tRateSpin, 1, 20, 5, " Hz", 1, 3);
-    addKnob("Tremolo Depth", tDepthDial, tDepthSpin, 0, 100, 0, " %", 1, 4);
-    addKnob("Master Vol", volDial, volSpin, 0, 100, 80, " %", 1, 5);
+    fxTabs->addTab(createChannelTab("Wave 1", knobs1, chan1), "Wave 1 Effects (Primary)");
+    fxTabs->addTab(createChannelTab("Wave 2", knobs2, chan2), "Wave 2 Effects (Superimposed)");
+    fxLayout->addWidget(fxTabs);
 
     mainLayout->addWidget(fxBox);
 
@@ -247,7 +229,6 @@ void MainWindow::setupUI()
     connect(waveSelect, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onParametersChanged);
     connect(waveSelect2, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onParametersChanged);
     connect(wave2ShiftSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onParametersChanged);
-    connect(fxTargetSelect, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onParametersChanged);
 
     connect(freqSlider, &QSlider::valueChanged, freqSpinBox, &QSpinBox::setValue);
     connect(freqSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), freqSlider, &QSlider::setValue);
@@ -265,7 +246,21 @@ void MainWindow::setupUI()
     connect(playBtn, &QPushButton::clicked, this, &MainWindow::onPlayClicked);
     connect(stopBtn, &QPushButton::clicked, this, &MainWindow::onStopClicked);
     connect(saveBtn, &QPushButton::clicked, this, &MainWindow::onSaveWavClicked);
-    connect(resetBtn, &QPushButton::clicked, this, &MainWindow::onResetEffectsClicked);
+}
+
+void MainWindow::updateChannelEffects(ChannelKnobs &k, ChannelEffects &fx)
+{
+    fx.highPass->setCutoff((float)k.hpDial->value());
+    fx.lowPass->setCutoff((float)k.lpDial->value());
+    fx.overdrive->setDrive(k.odDial->value() / 100.0f);
+    fx.dist->setThreshold(k.distDial->value() / 100.0f);
+    fx.bitcrush->setBitDepth(k.bitDial->value());
+    fx.reverb->setRoomSize(k.revDial->value() / 100.0f);
+    fx.echo->setDelayTime(k.delDial->value() / 1000.0f);
+    fx.echo->setFeedback(k.fbDial->value() / 100.0f);
+    fx.tremolo->setRate((float)k.tRateDial->value());
+    fx.tremolo->setDepth(k.tDepthDial->value() / 100.0f);
+    fx.gain->setVolume(k.volDial->value() / 100.0f);
 }
 
 void MainWindow::onParametersChanged()
@@ -286,18 +281,9 @@ void MainWindow::onParametersChanged()
         osc2->setFrequency(f2);
     }
 
-    // 2. Effects Parameters (Synchronized across both racks)
-    float hpVal = (float)hpDial->value(); highPass->setCutoff(hpVal); hp2->setCutoff(hpVal);
-    float lpVal = (float)lpDial->value(); lowPass->setCutoff(lpVal); lp2->setCutoff(lpVal);
-    float odVal = odDial->value() / 100.0f; overdrive->setDrive(odVal); od2->setDrive(odVal);
-    float dtVal = distDial->value() / 100.0f; dist->setThreshold(dtVal); dist2->setThreshold(dtVal);
-    int bitVal = bitDial->value(); bitcrush->setBitDepth(bitVal); bit2->setBitDepth(bitVal);
-    float revVal = revDial->value() / 100.0f; reverb->setRoomSize(revVal); rev2->setRoomSize(revVal);
-    float delVal = delDial->value() / 1000.0f; echo->setDelayTime(delVal); echo2->setDelayTime(delVal);
-    float fbVal = fbDial->value() / 100.0f; echo->setFeedback(fbVal); echo2->setFeedback(fbVal);
-    float trVal = (float)tRateDial->value(); tremolo->setRate(trVal); trem2->setRate(trVal);
-    float tdVal = tDepthDial->value() / 100.0f; tremolo->setDepth(tdVal); trem2->setDepth(tdVal);
-    float volVal = volDial->value() / 100.0f; masterGain->setVolume(volVal); gain2->setVolume(volVal);
+    // 2. Update individual effect pipelines for both wave channels
+    updateChannelEffects(knobs1, chan1);
+    updateChannelEffects(knobs2, chan2);
 
     // 3. Render & Display
     renderAudioBuffer();
@@ -313,42 +299,28 @@ void MainWindow::renderAudioBuffer()
     delete[] currentBuffer;
     currentBuffer = new float[currentSampleCount];
 
-    rack->resetAll();
-    rack2->resetAll();
     osc->reset();
     osc2->reset();
+    chan1.reset();
+    chan2.reset();
 
     bool superimpose = (waveSelect2->currentIndex() > 0);
-    int target = fxTargetSelect->currentIndex();
 
     for (int i = 0; i < currentSampleCount; ++i)
     {
-        float s1 = osc->process(0.0f);
-        float s2 = superimpose ? osc2->process(0.0f) : 0.0f;
+        // Each wave is processed through its own individual effects pipeline
+        float s1 = chan1.process(osc->process(0.0f));
 
-        float out = 0.0f;
-        if (!superimpose)
+        if (superimpose)
         {
-            out = rack->processPipeline(s1);
+            float s2 = chan2.process(osc2->process(0.0f));
+            // Superimpose both effected waves: y = (y1 + y2) / 2
+            currentBuffer[i] = 0.5f * (s1 + s2);
         }
-        else if (target == 0) // Both waves processed through their individual effects pipeline
+        else
         {
-            out = 0.5f * (rack->processPipeline(s1) + rack2->processPipeline(s2));
+            currentBuffer[i] = s1;
         }
-        else if (target == 1) // Effects applied to Wave 1 individually (Wave 2 stays clean)
-        {
-            out = 0.5f * (rack->processPipeline(s1) + s2);
-        }
-        else if (target == 2) // Effects applied to Wave 2 individually (Wave 1 stays clean)
-        {
-            out = 0.5f * (s1 + rack->processPipeline(s2));
-        }
-        else // Both waves combined first, then passed through effects
-        {
-            out = rack->processPipeline(0.5f * (s1 + s2));
-        }
-
-        currentBuffer[i] = out;
     }
 }
 
@@ -385,12 +357,4 @@ void MainWindow::onSaveWavClicked()
         QMessageBox::information(this, "Export Success", "Lossless WAV file successfully saved to:\n" + path);
     }
     else QMessageBox::critical(this, "Error", "Could not save WAV file.");
-}
-
-void MainWindow::onResetEffectsClicked()
-{
-    hpDial->setValue(20); lpDial->setValue(20000); odDial->setValue(0); distDial->setValue(100);
-    bitDial->setValue(16); revDial->setValue(0); delDial->setValue(250); fbDial->setValue(0);
-    tRateDial->setValue(5); tDepthDial->setValue(0); volDial->setValue(80);
-    statusLabel->setText("Effects reset to defaults.");
 }

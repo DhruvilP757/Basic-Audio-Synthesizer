@@ -229,7 +229,51 @@ public:
     }
 };
 
-// 13. FILE HANDLING: LOSSLESS 16-BIT WAV WRITER
+// 13. CHANNEL EFFECTS PIPELINE (OOP: Encapsulates all 10 effects for a wave channel)
+class ChannelEffects
+{
+public:
+    HighPassFilter *highPass;
+    LowPassFilter  *lowPass;
+    Overdrive      *overdrive;
+    Distortion     *dist;
+    Bitcrusher     *bitcrush;
+    Reverb         *reverb;
+    Echo           *echo;
+    Tremolo        *tremolo;
+    Gain           *gain;
+    EffectsRack    *rack;
+
+    ChannelEffects()
+    {
+        highPass  = new HighPassFilter(20.0f);
+        lowPass   = new LowPassFilter(20000.0f);
+        overdrive = new Overdrive(0.0f);
+        dist      = new Distortion(1.0f);
+        bitcrush  = new Bitcrusher(16);
+        reverb    = new Reverb(0.0f);
+        echo      = new Echo(0.25f, 0.0f);
+        tremolo   = new Tremolo(5.0f, 0.0f);
+        gain      = new Gain(0.8f);
+
+        rack = new EffectsRack(10);
+        rack->addNode(highPass); rack->addNode(lowPass); rack->addNode(overdrive);
+        rack->addNode(dist); rack->addNode(bitcrush); rack->addNode(reverb);
+        rack->addNode(echo); rack->addNode(tremolo); rack->addNode(gain);
+    }
+
+    ~ChannelEffects()
+    {
+        delete highPass; delete lowPass; delete overdrive; delete dist;
+        delete bitcrush; delete reverb; delete echo; delete tremolo;
+        delete gain; delete rack;
+    }
+
+    void reset() { rack->resetAll(); }
+    float process(float in) { return rack->processPipeline(in); }
+};
+
+// 14. FILE HANDLING: LOSSLESS 16-BIT WAV WRITER
 class WavWriter
 {
     struct WavHeader

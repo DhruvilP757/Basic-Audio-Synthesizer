@@ -8,26 +8,25 @@
 #include <QCheckBox>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
+#include <QTabWidget>
 #include "AudioEngine.h"
 #include "WaveformDisplay.h"
+
+// Groups the 10 UI knob dials and spinboxes for a single wave channel
+struct ChannelKnobs
+{
+    QDial *hpDial, *lpDial, *odDial, *distDial, *bitDial, *revDial, *delDial, *fbDial, *tRateDial, *tDepthDial, *volDial;
+    QSpinBox *hpSpin, *lpSpin, *odSpin, *distSpin, *bitSpin, *revSpin, *delSpin, *fbSpin, *tRateSpin, *tDepthSpin, *volSpin;
+};
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 private:
-    // Audio Engine Nodes (OOP: Dynamic Memory & Polymorphism)
+    // Audio Generators & Separate Channel Effects (OOP: Composition & RAII)
     Oscillator *osc, *osc2;
-    HighPassFilter *highPass, *hp2;
-    LowPassFilter *lowPass, *lp2;
-    Overdrive *overdrive, *od2;
-    Distortion *dist, *dist2;
-    Bitcrusher *bitcrush, *bit2;
-    Tremolo *tremolo, *trem2;
-    Echo *echo, *echo2;
-    Reverb *reverb, *rev2;
-    Gain *masterGain, *gain2;
-    EffectsRack *rack, *rack2;
+    ChannelEffects chan1, chan2;
 
     // UI: Generator & Duration
     QComboBox *waveSelect, *waveSelect2;
@@ -36,10 +35,9 @@ private:
     QDoubleSpinBox *durationSpinBox;
     QLabel *freqLabel;
 
-    // UI: Knobs with Synchronized Bottom SpinBoxes
-    QComboBox *fxTargetSelect;
-    QDial *hpDial, *lpDial, *odDial, *distDial, *bitDial, *revDial, *delDial, *fbDial, *tRateDial, *tDepthDial, *volDial;
-    QSpinBox *hpSpin, *lpSpin, *odSpin, *distSpin, *bitSpin, *revSpin, *delSpin, *fbSpin, *tRateSpin, *tDepthSpin, *volSpin;
+    // UI: Individual Effects Tabs
+    QTabWidget *fxTabs;
+    ChannelKnobs knobs1, knobs2;
 
     QCheckBox *autoPlayCheck;
     WaveformDisplay *visualizer;
@@ -50,6 +48,8 @@ private:
     int currentSampleCount;
 
     void setupUI();
+    QWidget *createChannelTab(const QString &title, ChannelKnobs &k, ChannelEffects &fx);
+    void updateChannelEffects(ChannelKnobs &k, ChannelEffects &fx);
     void renderAudioBuffer();
 
 private slots:
@@ -57,7 +57,6 @@ private slots:
     void onPlayClicked();
     void onStopClicked();
     void onSaveWavClicked();
-    void onResetEffectsClicked();
 
 public:
     MainWindow(QWidget *parent = nullptr);
