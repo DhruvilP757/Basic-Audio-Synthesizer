@@ -7,7 +7,10 @@
 #include <QMessageBox>
 #include <QDir>
 #include <QListView>
+#include <QApplication>
 #include <cmath>
+
+const float LIVE_PREVIEW_DURATION = 3.0f; // Fixed 3 seconds live sound playback
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -33,7 +36,6 @@ static QString getNoteName(float freq)
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), currentBuffer(nullptr), currentSampleCount(0)
 {
-    // Audio Generators
     osc = new Oscillator(440.0f, WaveType::SINE);
     osc2 = new Oscillator(440.0f, WaveType::SINE);
 
@@ -53,12 +55,12 @@ MainWindow::~MainWindow()
 }
 
 // Modular helper to create an individual channel's effect tab
-QWidget *MainWindow::createChannelTab(const QString &title, ChannelKnobs &k, ChannelEffects &fx)
+QWidget *MainWindow::createChannelTab(const QString &title, ChannelKnobs &k)
 {
     QWidget *tab = new QWidget();
     QGridLayout *grid = new QGridLayout(tab);
 
-    auto addKnob = [&](const QString &name, QDial *&d, QSpinBox *&s, int min, int max, int val, const QString &unit, int r, int c) {
+    auto addKnob = [&](const QString &name, QDial *&d, int min, int max, int val, const QString &unit, int r, int c) {
         QWidget *w = new QWidget();
         QVBoxLayout *l = new QVBoxLayout(w);
         l->setContentsMargins(2, 2, 2, 2); l->setSpacing(2);
@@ -68,7 +70,7 @@ QWidget *MainWindow::createChannelTab(const QString &title, ChannelKnobs &k, Cha
         lbl->setStyleSheet("font-weight: bold; font-size: 11px; color: #58a6ff;");
 
         d = new QDial(); d->setRange(min, max); d->setValue(val); d->setNotchesVisible(true);
-        s = new QSpinBox(); s->setRange(min, max); s->setValue(val); s->setSuffix(unit);
+        QSpinBox *s = new QSpinBox(); s->setRange(min, max); s->setValue(val); s->setSuffix(unit);
         s->setAlignment(Qt::AlignCenter); s->setButtonSymbols(QAbstractSpinBox::NoButtons);
         s->setStyleSheet("background: #272f3d; color: #f0f6fc; border: 1px solid #3c485c; border-radius: 3px; font-size: 11px; min-width: 55px;");
 
@@ -84,29 +86,29 @@ QWidget *MainWindow::createChannelTab(const QString &title, ChannelKnobs &k, Cha
     };
 
     // Row 0: Tone & Saturation
-    addKnob("High-Pass", k.hpDial, k.hpSpin, 20, 2000, 20, " Hz", 0, 0);
-    addKnob("Low-Pass", k.lpDial, k.lpSpin, 200, 20000, 20000, " Hz", 0, 1);
-    addKnob("Overdrive", k.odDial, k.odSpin, 0, 100, 0, " %", 0, 2);
-    addKnob("Distortion", k.distDial, k.distSpin, 5, 100, 100, " %", 0, 3);
-    addKnob("Bitcrush", k.bitDial, k.bitSpin, 2, 16, 16, " bit", 0, 4);
+    addKnob("High-Pass", k.hp, 20, 2000, 20, " Hz", 0, 0);
+    addKnob("Low-Pass", k.lp, 200, 20000, 20000, " Hz", 0, 1);
+    addKnob("Overdrive", k.od, 0, 100, 0, " %", 0, 2);
+    addKnob("Distortion", k.dist, 5, 100, 100, " %", 0, 3);
+    addKnob("Bitcrush", k.bit, 2, 16, 16, " bit", 0, 4);
 
     QPushButton *resetBtn = new QPushButton("Reset " + title + "\nEffects");
     resetBtn->setStyleSheet("background: #30363d; border: 1px solid #484f58; color: #f0f6fc; font-weight: bold; padding: 6px;");
     grid->addWidget(resetBtn, 0, 5);
 
     // Row 1: Space, Modulation & Volume
-    addKnob("Reverb", k.revDial, k.revSpin, 0, 90, 0, " %", 1, 0);
-    addKnob("Echo Time", k.delDial, k.delSpin, 20, 500, 250, " ms", 1, 1);
-    addKnob("Echo Repeat", k.fbDial, k.fbSpin, 0, 80, 0, " %", 1, 2);
-    addKnob("Tremolo Rate", k.tRateDial, k.tRateSpin, 1, 20, 5, " Hz", 1, 3);
-    addKnob("Tremolo Depth", k.tDepthDial, k.tDepthSpin, 0, 100, 0, " %", 1, 4);
-    addKnob("Master Vol", k.volDial, k.volSpin, 0, 100, 80, " %", 1, 5);
+    addKnob("Reverb", k.rev, 0, 90, 0, " %", 1, 0);
+    addKnob("Echo Time", k.del, 20, 500, 250, " ms", 1, 1);
+    addKnob("Echo Repeat", k.fb, 0, 80, 0, " %", 1, 2);
+    addKnob("Tremolo Rate", k.tRate, 1, 20, 5, " Hz", 1, 3);
+    addKnob("Tremolo Depth", k.tDepth, 0, 100, 0, " %", 1, 4);
+    addKnob("Master Vol", k.vol, 0, 100, 80, " %", 1, 5);
 
-    connect(resetBtn, &QPushButton::clicked, [&k, this]() {
-        k.hpDial->setValue(20); k.lpDial->setValue(20000); k.odDial->setValue(0);
-        k.distDial->setValue(100); k.bitDial->setValue(16); k.revDial->setValue(0);
-        k.delDial->setValue(250); k.fbDial->setValue(0); k.tRateDial->setValue(5);
-        k.tDepthDial->setValue(0); k.volDial->setValue(80);
+    connect(resetBtn, &QPushButton::clicked, [&k]() {
+        k.hp->setValue(20); k.lp->setValue(20000); k.od->setValue(0);
+        k.dist->setValue(100); k.bit->setValue(16); k.rev->setValue(0);
+        k.del->setValue(250); k.fb->setValue(0); k.tRate->setValue(5);
+        k.tDepth->setValue(0); k.vol->setValue(80);
     });
 
     return tab;
@@ -121,19 +123,19 @@ void MainWindow::setupUI()
     QGroupBox *genBox = new QGroupBox("1. Sound Generator && Wave Superposition");
     QGridLayout *genLayout = new QGridLayout(genBox);
 
-    auto styleCombo = [](QComboBox *c) {
+    const QStringList waves = {"Sine Wave", "Square Wave", "Sawtooth Wave", "Triangle Wave", "Pulse Wave (25%)", "White Noise"};
+    auto makeCombo = [&](bool allowNone) {
+        QComboBox *c = new QComboBox();
         c->setView(new QListView(c));
         c->setStyleSheet("QComboBox { padding: 4px; border: 1px solid #3c485c; border-radius: 4px; background: #272f3d; color: #f0f6fc; }"
                          "QComboBox QAbstractItemView { background: #202632; color: #f0f6fc; selection-background-color: #1f6feb; }");
+        if (allowNone) c->addItem("None (Single Wave)");
+        c->addItems(waves);
+        return c;
     };
 
-    waveSelect = new QComboBox();
-    styleCombo(waveSelect);
-    waveSelect->addItems({"Sine Wave", "Square Wave", "Sawtooth Wave", "Triangle Wave", "Pulse Wave (25%)", "White Noise"});
-
-    waveSelect2 = new QComboBox();
-    styleCombo(waveSelect2);
-    waveSelect2->addItems({"None (Single Wave)", "Sine Wave", "Square Wave", "Sawtooth Wave", "Triangle Wave", "Pulse Wave (25%)", "White Noise"});
+    waveSelect = makeCombo(false);
+    waveSelect2 = makeCombo(true);
 
     wave2ShiftSpin = new QSpinBox();
     wave2ShiftSpin->setRange(-24, 24);
@@ -153,15 +155,13 @@ void MainWindow::setupUI()
     freqLabel = new QLabel("(Note: A4)");
     freqLabel->setStyleSheet("color: #7ee787; font-weight: bold; min-width: 80px;");
 
-    durationSlider = new QSlider(Qt::Horizontal);
-    durationSlider->setRange(5, 50); // 0.5s - 5.0s
-    durationSlider->setValue(20);
-
     durationSpinBox = new QDoubleSpinBox();
-    durationSpinBox->setRange(0.5, 5.0);
-    durationSpinBox->setSingleStep(0.1);
-    durationSpinBox->setValue(2.0);
+    durationSpinBox->setRange(0.5, 600.0); // Time input in seconds up to 10 minutes (600s)
+    durationSpinBox->setSingleStep(1.0);
+    durationSpinBox->setValue(3.0);
+    durationSpinBox->setDecimals(1);
     durationSpinBox->setSuffix(" s");
+    durationSpinBox->setToolTip("Length of exported WAV file in seconds (0.5 s to 600.0 s / 10 minutes)");
 
     // Layout Row 0: Waveforms & Shift
     genLayout->addWidget(new QLabel("Wave 1:"), 0, 0);
@@ -171,17 +171,13 @@ void MainWindow::setupUI()
     genLayout->addWidget(new QLabel("Shift:"), 0, 4);
     genLayout->addWidget(wave2ShiftSpin, 0, 5);
 
-    // Layout Row 1: Pitch & Duration
+    // Layout Row 1: Pitch & Export File Length
     genLayout->addWidget(new QLabel("Pitch:"), 1, 0);
     genLayout->addWidget(freqSlider, 1, 1);
     genLayout->addWidget(freqSpinBox, 1, 2);
     genLayout->addWidget(freqLabel, 1, 3);
-    genLayout->addWidget(new QLabel("Duration:"), 1, 4);
-
-    QHBoxLayout *durBox = new QHBoxLayout();
-    durBox->addWidget(durationSlider);
-    durBox->addWidget(durationSpinBox);
-    genLayout->addLayout(durBox, 1, 5);
+    genLayout->addWidget(new QLabel("File Length:"), 1, 4);
+    genLayout->addWidget(durationSpinBox, 1, 5);
 
     mainLayout->addWidget(genBox);
 
@@ -196,8 +192,8 @@ void MainWindow::setupUI()
         "QTabBar::tab:selected { background: #1f6feb; color: #ffffff; }"
     );
 
-    fxTabs->addTab(createChannelTab("Wave 1", knobs1, chan1), "Wave 1 Effects (Primary)");
-    fxTabs->addTab(createChannelTab("Wave 2", knobs2, chan2), "Wave 2 Effects (Superimposed)");
+    fxTabs->addTab(createChannelTab("Wave 1", knobs1), "Wave 1 Effects (Primary)");
+    fxTabs->addTab(createChannelTab("Wave 2", knobs2), "Wave 2 Effects (Superimposed)");
     fxLayout->addWidget(fxTabs);
 
     mainLayout->addWidget(fxBox);
@@ -209,8 +205,10 @@ void MainWindow::setupUI()
 
     // 4. Playback & Export Controls
     QHBoxLayout *actionLayout = new QHBoxLayout();
-    QPushButton *playBtn = new QPushButton("Play Sound"), *stopBtn = new QPushButton("Stop"), *saveBtn = new QPushButton("Save Lossless .WAV File...");
-    autoPlayCheck = new QCheckBox("Live Hearing (Auto-play on change)");
+    QPushButton *playBtn = new QPushButton("Play Sound (3s)"), *stopBtn = new QPushButton("Stop"), *saveBtn = new QPushButton("Export Studio Master .WAV...");
+    autoPlayCheck = new QCheckBox("Live Hearing (Always On)");
+    autoPlayCheck->setChecked(true); // Always on live play option enabled by default
+    autoPlayCheck->setToolTip("Automatically play fixed 3-second live sound whenever any parameter is adjusted");
 
     actionLayout->addWidget(playBtn);
     actionLayout->addWidget(stopBtn);
@@ -219,7 +217,7 @@ void MainWindow::setupUI()
     actionLayout->addWidget(saveBtn);
     mainLayout->addLayout(actionLayout);
 
-    statusLabel = new QLabel("Ready.");
+    statusLabel = new QLabel("Ready (Studio Master: 192 kHz, 32-bit Float).");
     statusLabel->setStyleSheet("color: #7ee787; font-weight: bold;");
     mainLayout->addWidget(statusLabel);
 
@@ -234,13 +232,12 @@ void MainWindow::setupUI()
     connect(freqSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), freqSlider, &QSlider::setValue);
     connect(freqSlider, &QSlider::valueChanged, this, &MainWindow::onParametersChanged);
 
-    connect(durationSlider, &QSlider::valueChanged, [this](int v) {
-        durationSpinBox->blockSignals(true); durationSpinBox->setValue(v / 10.0); durationSpinBox->blockSignals(false);
-        onParametersChanged();
-    });
     connect(durationSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this](double v) {
-        durationSlider->blockSignals(true); durationSlider->setValue((int)(v * 10.0)); durationSlider->blockSignals(false);
-        onParametersChanged();
+        statusLabel->setText(QString("File export length set to %1 s (Max 600 s / 10 min).").arg(v, 0, 'f', 1));
+    });
+    connect(autoPlayCheck, &QCheckBox::toggled, [this](bool checked) {
+        if (!checked) onStopClicked();
+        else onPlayClicked();
     });
 
     connect(playBtn, &QPushButton::clicked, this, &MainWindow::onPlayClicked);
@@ -250,17 +247,17 @@ void MainWindow::setupUI()
 
 void MainWindow::updateChannelEffects(ChannelKnobs &k, ChannelEffects &fx)
 {
-    fx.highPass->setCutoff((float)k.hpDial->value());
-    fx.lowPass->setCutoff((float)k.lpDial->value());
-    fx.overdrive->setDrive(k.odDial->value() / 100.0f);
-    fx.dist->setThreshold(k.distDial->value() / 100.0f);
-    fx.bitcrush->setBitDepth(k.bitDial->value());
-    fx.reverb->setRoomSize(k.revDial->value() / 100.0f);
-    fx.echo->setDelayTime(k.delDial->value() / 1000.0f);
-    fx.echo->setFeedback(k.fbDial->value() / 100.0f);
-    fx.tremolo->setRate((float)k.tRateDial->value());
-    fx.tremolo->setDepth(k.tDepthDial->value() / 100.0f);
-    fx.gain->setVolume(k.volDial->value() / 100.0f);
+    fx.highPass->setCutoff((float)k.hp->value());
+    fx.lowPass->setCutoff((float)k.lp->value());
+    fx.overdrive->setDrive(k.od->value() / 100.0f);
+    fx.dist->setThreshold(k.dist->value() / 100.0f);
+    fx.bitcrush->setBitDepth(k.bit->value());
+    fx.reverb->setRoomSize(k.rev->value() / 100.0f);
+    fx.echo->setDelayTime(k.del->value() / 1000.0f);
+    fx.echo->setFeedback(k.fb->value() / 100.0f);
+    fx.tremolo->setRate((float)k.tRate->value());
+    fx.tremolo->setDepth(k.tDepth->value() / 100.0f);
+    fx.gain->setVolume(k.vol->value() / 100.0f);
 }
 
 void MainWindow::onParametersChanged()
@@ -277,8 +274,7 @@ void MainWindow::onParametersChanged()
     if (w2 > 0)
     {
         osc2->setWaveType(static_cast<WaveType>(w2 - 1));
-        float f2 = freq * std::pow(2.0f, wave2ShiftSpin->value() / 12.0f);
-        osc2->setFrequency(f2);
+        osc2->setFrequency(freq * std::pow(2.0f, wave2ShiftSpin->value() / 12.0f));
     }
 
     // 2. Update individual effect pipelines for both wave channels
@@ -293,11 +289,13 @@ void MainWindow::onParametersChanged()
 
 void MainWindow::renderAudioBuffer()
 {
-    float duration = durationSlider->value() / 10.0f;
-    currentSampleCount = static_cast<int>(SAMPLE_RATE * duration);
-
-    delete[] currentBuffer;
-    currentBuffer = new float[currentSampleCount];
+    // Fixed 3 seconds live preview audio buffer (576,000 samples @ 192 kHz)
+    const int targetSampleCount = static_cast<int>(SAMPLE_RATE * LIVE_PREVIEW_DURATION);
+    if (!currentBuffer || currentSampleCount != targetSampleCount)
+    {
+        delete[] currentBuffer;
+        currentBuffer = new float[currentSampleCount = targetSampleCount];
+    }
 
     osc->reset();
     osc2->reset();
@@ -305,22 +303,11 @@ void MainWindow::renderAudioBuffer()
     chan2.reset();
 
     bool superimpose = (waveSelect2->currentIndex() > 0);
-
     for (int i = 0; i < currentSampleCount; ++i)
     {
-        // Each wave is processed through its own individual effects pipeline
-        float s1 = chan1.process(osc->process(0.0f));
-
-        if (superimpose)
-        {
-            float s2 = chan2.process(osc2->process(0.0f));
-            // Superimpose both effected waves: y = (y1 + y2) / 2
-            currentBuffer[i] = 0.5f * (s1 + s2);
-        }
-        else
-        {
-            currentBuffer[i] = s1;
-        }
+        float s = chan1.process(osc->process(0.0f));
+        if (superimpose) s = 0.5f * (s + chan2.process(osc2->process(0.0f)));
+        currentBuffer[i] = s;
     }
 }
 
@@ -333,7 +320,7 @@ void MainWindow::onPlayClicked()
 #ifdef _WIN32
         PlaySoundW(reinterpret_cast<LPCWSTR>(tempPath.utf16()), NULL, SND_FILENAME | SND_ASYNC);
 #endif
-        statusLabel->setText("Playing audio live...");
+        statusLabel->setText("Playing 3s live preview (192 kHz, 32-bit Float)...");
     }
 }
 
@@ -342,19 +329,32 @@ void MainWindow::onStopClicked()
 #ifdef _WIN32
     PlaySoundW(NULL, NULL, 0);
 #endif
-    statusLabel->setText("Audio stopped.");
+    statusLabel->setText("Playback stopped.");
 }
 
 void MainWindow::onSaveWavClicked()
 {
-    QString path = QFileDialog::getSaveFileName(this, "Export Lossless WAV", "synthesizer_output.wav", "WAV Audio (*.wav)");
+    QString path = QFileDialog::getSaveFileName(this, "Export Studio Master WAV", "synthesizer_192k_32bit.wav", "Studio Master WAV (*.wav);;All Files (*.*)");
     if (path.isEmpty()) return;
     if (!path.endsWith(".wav", Qt::CaseInsensitive)) path += ".wav";
 
-    if (WavWriter::save(path.toStdString(), currentBuffer, currentSampleCount))
+    float fileDuration = static_cast<float>(durationSpinBox->value());
+    statusLabel->setText(QString("Exporting %1s Studio Master WAV file...").arg(fileDuration, 0, 'f', 1));
+    QApplication::processEvents();
+
+    bool superimpose = (waveSelect2->currentIndex() > 0);
+    bool ok = WavWriter::saveStream(path.toStdString(), osc, osc2, chan1, chan2, superimpose, fileDuration);
+
+    renderAudioBuffer();
+
+    if (ok)
     {
         statusLabel->setText("Saved successfully: " + path);
-        QMessageBox::information(this, "Export Success", "Lossless WAV file successfully saved to:\n" + path);
+        QMessageBox::information(this, "Export Success", QString("Studio Master Ultra Hi-Res WAV (%1 seconds, 192 kHz, 32-bit Float) successfully saved to:\n%2")
+                                 .arg(fileDuration, 0, 'f', 1).arg(path));
     }
-    else QMessageBox::critical(this, "Error", "Could not save WAV file.");
+    else
+    {
+        QMessageBox::critical(this, "Error", "Could not save WAV file.");
+    }
 }

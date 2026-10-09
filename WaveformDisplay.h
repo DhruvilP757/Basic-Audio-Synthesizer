@@ -20,7 +20,7 @@ public:
 
     void updateWaveform(const float *buf, int count)
     {
-        if (buf && count > 0) preview.assign(buf, buf + count);
+        if (buf && count > 0) preview.assign(buf, buf + std::min(1000, count));
         else preview.clear();
         update();
     }

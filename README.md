@@ -10,7 +10,7 @@
 
 **Digital Audio Synthesizer** is an educational and functional digital audio workstation (DAW) synthesizer built from scratch without external audio engines. It demonstrates fundamental and advanced **Object-Oriented Programming (OOP)** principles alongside real-world acoustics, wave physics, and digital signal processing.
 
-The application features dual-oscillator wave superposition, a full 20 Hz to 20,000 Hz human hearing pitch spectrum, 10 real-world audio effects with synchronized editable numeric controls, individual wave effect routing, real-time waveform visualization, and studio-quality lossless 16-bit PCM WAV export.
+The application features dual-oscillator wave superposition, a full 20 Hz to 20,000 Hz human hearing pitch spectrum, 10 real-world audio effects with synchronized editable numeric controls, individual wave effect routing, real-time waveform visualization, and Studio Master Ultra Hi-Res lossless 32-bit Float (192 kHz) WAV export.
 
 ---
 
@@ -23,7 +23,7 @@ The application features dual-oscillator wave superposition, a full 20 Hz to 20,
 - **Harmonic Semitone Shift**: Pitch-shift the secondary wave from `-24` to `+24` semitones (`st`) for unisons, musical fifths, or dual-octave chords.
 - **Full Human Hearing Range**: Smoothly sweep frequencies across the complete human hearing spectrum (**20 Hz to 20,000 Hz**) with synchronized numeric input.
 - **Automatic Musical Note Detection**: Displays musical pitches in real time (e.g., `Note: A4`, `Note: C1`, `Sub-bass`, `High Treble`).
-- **Configurable Sound Duration**: Set audio duration from `0.5 s` to `5.0 s`.
+- **Configurable File Export Duration**: Direct time input in seconds from **0.5 s up to 600.0 s (10 minutes)** for full-length studio audio recordings.
 
 ### 2. Multi-Effects Processing Rack (10 Usable Effects)
 Every effect dial features an **editable numeric box directly at its bottom** for precise input:
@@ -51,8 +51,8 @@ Choose how the DSP rack processes superimposed waves:
 
 ### 4. Monitoring, Playback & Lossless Export
 - **Real-Time Waveform Monitor**: Oscilloscope display showing the synthesized waveform geometry.
-- **Live Hearing**: Instant background audio preview with dedicated `Play Sound`, `Stop`, and an `Auto-play on change` live mode.
-- **Lossless .WAV Export**: Generates standard uncompressed 16-bit Linear PCM audio files at 44.1 kHz with smooth 20ms anti-pop envelopes.
+- **Live Hearing (Always On)**: Instant fixed 3-second live sound preview triggered immediately on every parameter change, with a dedicated `Stop` button to halt live playback at any time and `Play Sound (3s)` for manual preview.
+- **Studio Master Ultra Hi-Res WAV Export**: Generates pristine IEEE 32-bit Floating Point audio files at 192 kHz (192,000 samples/sec) with streaming block rendering up to 10 minutes (600 seconds) without high memory overhead.
 
 ---
 
@@ -196,9 +196,9 @@ cmake --build "build\Desktop_Qt_6_11_2_MinGW_64_bit_Debug"
 
 - **Language**: C++17
 - **GUI Framework**: Qt 6 (Widgets)
-- **Audio Output**: 16-bit Linear PCM Mono, 44.1 kHz (CD Quality)
+- **Audio Output**: 32-bit IEEE Float Mono, 192 kHz (Studio Master Ultra Hi-Res Quality)
 - **Audio Playback Backend**: Windows Multimedia API (`winmm`)
-- **File Format**: Standard RIFF WAVE (`.wav`)
+- **File Format**: Standard RIFF WAVE (`.wav`, Format Tag 3: IEEE Float)
 
 ---
 
